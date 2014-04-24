@@ -10,7 +10,7 @@ import unittest
 import subprocess
 import socket
 
-working_ssh_host = "sovtek"  # set this to a working ssh host string (e.g. "localhost") to activate integration tests
+working_ssh_host = None  # set this to a working ssh host string (e.g. "localhost") to activate integration tests
 # The following tests require a working ssh server at `working_ssh_host`
 # the test runner can ssh into using password-less authentication
 
