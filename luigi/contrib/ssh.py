@@ -41,11 +41,12 @@ import contextlib
 
 
 class RemoteContext(object):
-    def __init__(self, host, username=None, key_file=None, connect_timeout=None):
+    def __init__(self, host, username=None, key_file=None, connect_timeout=None, xz=None):
         self.host = host
         self.username = username
         self.key_file = key_file
         self.connect_timeout = connect_timeout
+        self.xz = xz
 
     def _host_ref(self):
         if self.username:
@@ -64,6 +65,11 @@ class RemoteContext(object):
 
         if self.key_file:
             connection_cmd.extend(["-i", self.key_file])
+
+        print "from host: ", self.host, " run: ", connection_cmd, cmd
+        if self.xz:
+            return connection_cmd + self.xz._prepare_cmd(cmd)
+
         return connection_cmd + cmd
 
     def Popen(self, cmd, **kwargs):
@@ -76,6 +82,9 @@ class RemoteContext(object):
 
         Simplified version of Popen when you only want the output as a string and detect any errors
         """
+        print "LASDKFLASDKFL"
+        print cmd
+        print self.host
         p = self.Popen(cmd, stdout=subprocess.PIPE)
         output, _ = p.communicate()
         if p.returncode != 0:

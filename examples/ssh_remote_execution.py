@@ -3,7 +3,7 @@ import luigi
 from luigi.contrib.ssh import RemoteContext, RemoteTarget
 from luigi.mock import MockFile
 
-SSH_HOST = "some.accessible.host"
+SSH_HOST = "sovtek"
 
 
 class CreateRemoteData(luigi.Task):
