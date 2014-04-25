@@ -66,7 +66,6 @@ class RemoteContext(object):
         if self.key_file:
             connection_cmd.extend(["-i", self.key_file])
 
-        print "from host: ", self.host, " run: ", connection_cmd, cmd
         if self.xz:
             return connection_cmd + self.xz._prepare_cmd(cmd)
 
@@ -82,9 +81,6 @@ class RemoteContext(object):
 
         Simplified version of Popen when you only want the output as a string and detect any errors
         """
-        print "LASDKFLASDKFL"
-        print cmd
-        print self.host
         p = self.Popen(cmd, stdout=subprocess.PIPE)
         output, _ = p.communicate()
         if p.returncode != 0:
@@ -114,8 +110,11 @@ class RemoteContext(object):
 
 
 class RemoteFileSystem(luigi.target.FileSystem):
-    def __init__(self, host, username=None, key_file=None):
-        self.remote_context = RemoteContext(host, username, key_file)
+    def __init__(self, host=None, username=None, key_file=None, remote_context=None):
+        if remote_context == None:
+            self.remote_context = RemoteContext(host, username, key_file)
+        else:
+            self.remote_context = remote_context
 
     def exists(self, path):
         """ Return `True` if file or directory at `path` exist, False otherwise """
@@ -158,6 +157,18 @@ class RemoteFileSystem(luigi.target.FileSystem):
         self._scp(local_path, "%s:%s" % (self.remote_context._host_ref(), tmp_path))
         self.remote_context.check_output(['mv', tmp_path, path])
 
+    def _cat_get(self, src, dest): 
+        """ uses cat to get through multiple machines """ 
+        #FIXME loses permissions
+        output = None
+        cmd = ["cat", src]
+        with open(dest, 'w') as desthandle: 
+            p = self.remote_context.Popen(cmd, stdout=desthandle)
+            output, _ = p.communicate()
+            if p.returncode != 0:
+                raise subprocess.CalledProcessError(p.returncode, cmd)
+        return output
+
     def get(self, path, local_path):
         # Create folder if it does not exist
         normpath = os.path.normpath(local_path)
@@ -166,7 +177,10 @@ class RemoteFileSystem(luigi.target.FileSystem):
             os.makedirs(folder)
 
         tmp_local_path = local_path + '-luigi-tmp-%09d' % random.randrange(0, 1e10)
-        self._scp("%s:%s" % (self.remote_context._host_ref(), path), tmp_local_path)
+        if self.remote_context.xz:
+            print self._cat_get(path,tmp_local_path)
+        else:
+            self._scp("%s:%s" % (self.remote_context._host_ref(), path), tmp_local_path)
         os.rename(tmp_local_path, local_path)
 
 
@@ -208,10 +222,14 @@ class RemoteTarget(luigi.target.FileSystemTarget):
     Target used for reading from remote files. The target is implemented using
     ssh commands streaming data over the network.
     """
-    def __init__(self, path, host, format=None, username=None, key_file=None):
+    def __init__(self, path, host=None, format=None, username=None, key_file=None, remote_context=None):
         self.path = path
         self.format = format
-        self._fs = RemoteFileSystem(host, username, key_file)
+        self.remote_context = remote_context
+        if host: 
+            self._fs = RemoteFileSystem(host, username, key_file)
+        elif self.remote_context:
+            self._fs = RemoteFileSystem(remote_context=self.remote_context)
 
     @property
     def fs(self):
