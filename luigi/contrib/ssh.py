@@ -146,6 +146,17 @@ class RemoteFileSystem(luigi.target.FileSystem):
         if p.returncode != 0:
             raise subprocess.CalledProcessError(p.returncode, cmd)
 
+    def _cat_put(self, src, dest):
+        output = None
+        cmdl = ["cat", src]
+        cmd = ["cat", "-", "\>", dest] #that escape seems wrong-ish
+        pl = subprocess.Popen(cmdl, stdout=subprocess.PIPE)
+        p = self.remote_context.Popen(cmd, stdin=pl.stdout)
+        output, _ = p.communicate()
+        if p.returncode != 0:
+            raise subprocess.CalledProcessError(p.returncode, cmd)
+        return output
+
     def put(self, local_path, path):
         # create parent folder if not exists
         normpath = os.path.normpath(path)
@@ -154,7 +165,10 @@ class RemoteFileSystem(luigi.target.FileSystem):
             self.remote_context.check_output(['mkdir', '-p', folder])
 
         tmp_path = path + '-luigi-tmp-%09d' % random.randrange(0, 1e10)
-        self._scp(local_path, "%s:%s" % (self.remote_context._host_ref(), tmp_path))
+        if self.remote_context.xz:
+            print self._cat_put(local_path,tmp_path)
+        else:
+            self._scp(local_path, "%s:%s" % (self.remote_context._host_ref(), tmp_path))
         self.remote_context.check_output(['mv', tmp_path, path])
 
     def _cat_get(self, src, dest): 
@@ -167,6 +181,21 @@ class RemoteFileSystem(luigi.target.FileSystem):
             output, _ = p.communicate()
             if p.returncode != 0:
                 raise subprocess.CalledProcessError(p.returncode, cmd)
+        return output
+
+    def _tar_get(self, src, dest): 
+        """ uses tar to get through multiple machines """ 
+        #FIXME broken pulls down whole dir into new root
+        # should use wondertar:
+        # ssh user@machine-where-precious-data-is "tar czpf - /some/important/data" | tar xzpf - -C /new/root/directory
+        output = None
+        cmd_local = ["tar", "xzpf", "-", "-C", "/tmp/testd"] # this is not a dest because it becomes a new root XXX
+        cmd_remote = ["tar", "czpf", " - ", src]
+        premote = self.remote_context.Popen(cmd_remote, stdout=subprocess.PIPE)
+        plocal = subprocess.Popen(cmd_local, stdin=premote.stdout)
+        output, _ = plocal.communicate()
+        if plocal.returncode != 0:
+            raise subprocess.CalledProcessError(plocal.returncode, cmd_local)
         return output
 
     def get(self, path, local_path):
